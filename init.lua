@@ -155,47 +155,6 @@ vim.lsp.config("ts_ls", {
     },
 })
 
--- vtsls for TypeScript
-vim.lsp.config("vtsls", {
-    cmd = { "vtsls", "--stdio" },
-
-    filetypes = {
-        "typescript",
-        "javascript",
-        "typescriptreact",
-        "javascriptreact",
-    },
-
-    root_dir = vim.fs.root(0, {
-        "tsconfig.json",
-        "jsconfig.json",
-        "package.json",
-        ".git",
-    }),
-
-    settings = {
-        typescript = {
-            inlayHints = {
-                parameterNames = { enabled = "all" },
-                parameterTypes = { enabled = true },
-                variableTypes = { enabled = true },
-                propertyDeclarationTypes = { enabled = true },
-                functionLikeReturnTypes = { enabled = true },
-            },
-            preferences = {
-                importModuleSpecifier = "non-relative",
-            },
-        },
-
-        javascript = {
-            inlayHints = {
-                parameterNames = { enabled = "all" },
-                variableTypes = { enabled = true },
-            },
-        },
-    },
-})
-
 local mason_ok, mason = pcall(require, "mason")
 local registry_ok, registry = pcall(require, "mason-registry")
 if mason_ok and registry_ok then
@@ -295,7 +254,47 @@ local cmp_capabilities = (function()
 end)()
 vim.lsp.config("*", { capabilities = cmp_capabilities })
 
-vim.lsp.enable({ "basedpyright", "gopls", "golangci_lint_ls", "lua_ls", "vtsls" })
+-- tsgo (native TypeScript 7 Go LSP)
+vim.lsp.config("tsgo", {
+    cmd = { "tsgo", "--lsp", "--stdio" },
+
+    filetypes = {
+        "typescript",
+        "javascript",
+        "typescriptreact",
+        "javascriptreact",
+    },
+
+    root_dir = vim.fs.root(0, {
+        "tsconfig.json",
+        "jsconfig.json",
+        "package.json",
+        ".git",
+    }),
+
+    settings = {
+        typescript = {
+            inlayHints = {
+                parameterNames = { enabled = "literals" },
+                parameterTypes = { enabled = true },
+                variableTypes = { enabled = true },
+                functionLikeReturnTypes = { enabled = true },
+                enumMemberValues = { enabled = true },
+            },
+            preferences = {
+                importModuleSpecifier = "non-relative",
+            },
+        },
+        javascript = {
+            inlayHints = {
+                parameterNames = { enabled = "literals" },
+                variableTypes = { enabled = true },
+            },
+        },
+    },
+})
+
+vim.lsp.enable({ "basedpyright", "gopls", "golangci_lint_ls", "lua_ls", "tsgo" })
 
 -- Enable inlay hints and code lens when the server supports them
 vim.api.nvim_create_autocmd("LspAttach", {
@@ -456,6 +455,7 @@ if cf_ok then
             json       = { "prettierd", "prettier" },
             yaml       = { "prettierd", "prettier" },
             markdown   = { "prettierd", "prettier" },
+            c = {"astyle"},
         },
     })
     vim.api.nvim_create_autocmd("BufWritePre", {
