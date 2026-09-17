@@ -101,6 +101,14 @@ vim.diagnostic.config({
     },
 })
 
+-- *.tf is detected as TinyFugue ("tf") for empty files; force Terraform
+-- so terraform-ls attaches to new/empty *.tf files too.
+vim.filetype.add({
+    extension = {
+        tf = "terraform",
+    },
+})
+
 -- LSP 
 vim.lsp.config("basedpyright", {
     cmd          = { "basedpyright-langserver", "--stdio" },
@@ -155,11 +163,24 @@ vim.lsp.config("ts_ls", {
     },
 })
 
+
 local mason_ok, mason = pcall(require, "mason")
 local registry_ok, registry = pcall(require, "mason-registry")
 if mason_ok and registry_ok then
     mason.setup()
     local prompted = {}
+    -- Map lspconfig server names to mason package names.
+    -- Servers not in this map (e.g. tsgo, installed via npm/cargo)
+    -- are skipped for mason auto-install.
+    local mason_pkg_map = {
+        basedpyright     = "basedpyright",
+        gopls            = "gopls",
+        golangci_lint_ls = "golangci-lint-langserver",
+        lua_ls           = "lua-language-server",
+        ts_ls            = "typescript-language-server",
+        ["terraform-ls"] = "terraform-ls",
+        bashls           = "bash-language-server",
+    }
     local function servers_for_ft(ft)
         local servers = {}
         for name, config in pairs(vim.lsp.config) do
@@ -178,13 +199,16 @@ if mason_ok and registry_ok then
 
                 for _, server in ipairs(servers_for_ft(args.match)) do
                     if not prompted[server] then
-                        local ok, pkg = pcall(registry.get_package, server)
+                        local pkg_name = mason_pkg_map[server]
+                        if pkg_name then
+                            local ok, pkg = pcall(registry.get_package, pkg_name)
 
-                        if ok and not pkg:is_installed() then
-                            table.insert(missing, {
-                                server = server,
-                                package = pkg,
-                            })
+                            if ok and not pkg:is_installed() then
+                                table.insert(missing, {
+                                    server = server,
+                                    package = pkg,
+                                })
+                            end
                         end
                     end
                 end
@@ -294,7 +318,23 @@ vim.lsp.config("tsgo", {
     },
 })
 
-vim.lsp.enable({ "basedpyright", "gopls", "golangci_lint_ls", "lua_ls", "tsgo" })
+-- Terraform
+vim.lsp.config("terraform-ls", {
+    cmd          = { "terraform-ls", "serve" },
+    filetypes    = { "terraform", "terraform-vars" },
+    root_markers = { ".terraform", ".git" },
+})
+
+-- Bash
+vim.lsp.config("bashls", {
+    cmd          = { "bash-language-server", "start" },
+    filetypes    = { "bash", "sh" },
+    root_markers = { ".git" },
+    settings     = {
+        bashIde = { globPattern = "*@(.sh|.inc|.bash|.command)" },
+    },
+})
+vim.lsp.enable({ "basedpyright", "gopls", "golangci_lint_ls", "lua_ls", "tsgo", "terraform-ls", "bashls" })
 
 -- Enable inlay hints and code lens when the server supports them
 vim.api.nvim_create_autocmd("LspAttach", {
@@ -455,6 +495,10 @@ if cf_ok then
             json       = { "prettierd", "prettier" },
             yaml       = { "prettierd", "prettier" },
             markdown   = { "prettierd", "prettier" },
+            terraform  = { "terraform_fmt" },
+            ["terraform-vars"] = { "terraform_fmt" },
+            sh = { "shfmt" },
+            bash = { "shfmt" },
             c = {"astyle"},
         },
     })
@@ -482,7 +526,7 @@ end
 local ts_ok, ts = pcall(require, "nvim-treesitter.configs")
 if ts_ok then
     ts.setup({
-        ensure_installed = { "lua", "python", "go", "bash", "json", "yaml", "markdown" },
+        ensure_installed = { "lua", "python", "go", "bash", "json", "yaml", "markdown", "terraform", "hcl" },
         highlight        = { enable = true },
         indent           = { enable = true },
     })
