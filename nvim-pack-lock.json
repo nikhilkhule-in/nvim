@@ -36,6 +36,10 @@
       "rev": "8d79f2410c76e62b92e51c28c82e28c1c5a3daeb",
       "src": "https://github.com/lewis6991/gitsigns.nvim"
     },
+    "iron.nvim": {
+      "rev": "0168b419bc7df70cd2d97c2ec8158b6b002450b2",
+      "src": "https://github.com/Vigemus/iron.nvim"
+    },
     "lualine.nvim": {
       "rev": "221ce6b2d999187044529f49da6554a92f740a96",
       "src": "https://github.com/nvim-lualine/lualine.nvim"

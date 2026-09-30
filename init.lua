@@ -26,6 +26,7 @@ vim.pack.add({
     { src = "https://github.com/projekt0n/github-nvim-theme" },
     { src = "https://github.com/gmr458/vscode_modern_theme.nvim" },
     { src = "https://github.com/EdenEast/nightfox.nvim.git" },
+    { src = "https://github.com/Vigemus/iron.nvim" },
 })
 
 -- snacks.nvim
@@ -180,6 +181,7 @@ if mason_ok and registry_ok then
         ts_ls            = "typescript-language-server",
         ["terraform-ls"] = "terraform-ls",
         bashls           = "bash-language-server",
+        rust_analyzer    = "rust-analyzer",
     }
     local function servers_for_ft(ft)
         local servers = {}
@@ -334,7 +336,22 @@ vim.lsp.config("bashls", {
         bashIde = { globPattern = "*@(.sh|.inc|.bash|.command)" },
     },
 })
-vim.lsp.enable({ "basedpyright", "gopls", "golangci_lint_ls", "lua_ls", "tsgo", "terraform-ls", "bashls" })
+
+-- Rust
+vim.lsp.config("rust_analyzer", {
+    cmd          = { "rust-analyzer" },
+    filetypes    = { "rust" },
+    root_markers = { "Cargo.toml", "Cargo.lock", ".git" },
+    settings     = {
+        ["rust-analyzer"] = {
+            cargo     = { allFeatures = true, loadOutDirsFromCheck = true, buildScripts = { enable = true } },
+            check     = { command = "clippy" },
+            procMacro = { enable = true },
+        },
+    },
+})
+
+vim.lsp.enable({ "basedpyright", "gopls", "golangci_lint_ls", "lua_ls", "tsgo", "terraform-ls", "bashls", "rust_analyzer" })
 
 -- Enable inlay hints and code lens when the server supports them
 vim.api.nvim_create_autocmd("LspAttach", {
@@ -500,6 +517,7 @@ if cf_ok then
             sh = { "shfmt" },
             bash = { "shfmt" },
             c = {"astyle"},
+            rust = { "rustfmt" },
         },
     })
     vim.api.nvim_create_autocmd("BufWritePre", {
@@ -526,7 +544,7 @@ end
 local ts_ok, ts = pcall(require, "nvim-treesitter.configs")
 if ts_ok then
     ts.setup({
-        ensure_installed = { "lua", "python", "go", "bash", "json", "yaml", "markdown", "terraform", "hcl" },
+        ensure_installed = { "lua", "python", "go", "bash", "json", "yaml", "markdown", "terraform", "hcl", "rust", "toml" },
         highlight        = { enable = true },
         indent           = { enable = true },
     })
@@ -587,6 +605,56 @@ if uv_ok then
         notification_timeout = 10000,
       },
     })
+end
+
+-- iron.nvim (Interactive Repls Over Neovim)
+local iron_ok, iron = pcall(require, "iron.core")
+if iron_ok then
+    local view = require("iron.view")
+    local common = require("iron.fts.common")
+    iron.setup({
+        config = {
+            scratch_repl = true,
+            repl_definition = {
+                sh = { command = { "bash" } },
+                python = {
+                    command = { "python3" },
+                    format = common.bracketed_paste_python,
+                    block_dividers = { "# %%", "#%%" },
+                    env = { PYTHON_BASIC_REPL = "1" }, -- needed for python3.13+
+                },
+                lua = { command = { "lua" } },
+                javascript = { command = { "node" } },
+                typescript = { command = { "node" } },
+            },
+            repl_filetype = function(_, ft) return ft end,
+            repl_open_cmd = view.bottom(40),
+        },
+        keymaps = {
+            toggle_repl = "<leader>rr",
+            restart_repl = "<leader>rR",
+            send_motion = "<leader>sc",
+            visual_send = "<leader>sc",
+            send_file = "<leader>sf",
+            send_line = "<leader>sl",
+            send_paragraph = "<leader>sp",
+            send_until_cursor = "<leader>su",
+            send_mark = "<leader>sm",
+            send_code_block = "<leader>sb",
+            send_code_block_and_move = "<leader>sn",
+            mark_motion = "<leader>mc",
+            mark_visual = "<leader>mc",
+            remove_mark = "<leader>md",
+            cr = "<leader>s<cr>",
+            interrupt = "<leader>s<space>",
+            exit = "<leader>sq",
+            clear = "<leader>cl",
+        },
+        highlight = { italic = true },
+        ignore_blank_lines = true,
+    })
+    map("n", "<leader>rf", "<cmd>IronFocus<cr>", "Iron focus REPL")
+    map("n", "<leader>rh", "<cmd>IronHide<cr>", "Iron hide REPL")
 end
 
 -- lualine
@@ -690,9 +758,7 @@ map("n", "<leader><S-Tab>", "<Cmd>bprevious<CR>", "Open previous buffer")
 
 -- Misc
 map("n", "<Esc>",     "<cmd>nohlsearch<CR>", "Clear search highlight")
-map("n", "<leader>w", "<cmd>write<CR>",      "Save")
-map("n", "<leader>q", "<cmd>quit<CR>",       "Quit")
-map("n", "<leader>u", "<cmd>packadd nvim.undotree | Undotree<CR>", "Undotree")
+map("n", "<leader>w", function() require("workspace").switch() end, "Switch project/worktree")
 
 -- Colorscheme 
 vim.cmd.colorscheme("carbonfox")
