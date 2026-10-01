@@ -44,48 +44,103 @@ local function git_worktrees(repo)
     return worktrees
 end
 
+local function git_branch(dir)
+    local result = vim.system(
+        { "git", "-C", dir, "branch", "--show-current" },
+        { text = true }
+    ):wait()
+    if result.code ~= 0 then
+        return nil
+    end
+    local branch = (result.stdout or ""):gsub("%s+$", "")
+    if branch == "" then
+        return nil
+    end
+    return branch
+end
+
 local function discover()
-    local workspaces = {}
-    
+    local items = {}
+
     for _, project_dir in ipairs(vim.fn.glob(M.root .. "/*", false, true)) do
         if vim.fn.isdirectory(project_dir) == 1 then
-            local project=  vim.fn.fnamemodify(project_dir, ":t")
+            local project = vim.fn.fnamemodify(project_dir, ":t")
+            local project_session = tmux_session_name(project_dir)
+
+            -- Project itself: `workspaceup` roots a tmux session here.
+            table.insert(items, {
+                kind = "project",
+                text = project,
+                file = project_dir,
+                branch = git_branch(project_dir),
+                session = project_session,
+                session_exists = tmux_session_exists(project_session),
+            })
+
             local default = project_dir .. "/default"
 
-            -- `default` is our filessystem convention for the
+            -- `default` is our filesystem convention for the
             -- checkout from which we query the repository
             if vim.fn.isdirectory(default) == 1 then
                 local worktrees = git_worktrees(default)
 
-                for _, wt in ipairs(worktrees) do
-                    local worktree_name = vim.fn.fnamemodify(wt.path, ":t")
-                    local session = tmux_session_name(wt.path)
-
-                    table.insert(workspaces, {
-                        text = project .. "-" .. worktree_name,
-                        file = wt.path,
-                        branch = wt.branch,
-                        session = session,
-                        session_exists = tmux_session_exists(session),
+                if #worktrees == 0 then
+                    -- Not a git repo (yet) or no linked worktrees:
+                    -- fall back to the directories on disk.
+                    table.insert(items, {
+                        kind = "workspace",
+                        text = project .. "-default",
+                        file = default,
+                        branch = git_branch(default),
+                        session = tmux_session_name(default),
+                        session_exists = tmux_session_exists(tmux_session_name(default)),
                     })
+                    for _, wt_dir in ipairs(vim.fn.glob(project_dir .. "/worktrees/*", false, true)) do
+                        if vim.fn.isdirectory(wt_dir) == 1 then
+                            local wt_name = vim.fn.fnamemodify(wt_dir, ":t")
+                            local session = tmux_session_name(wt_dir)
+                            table.insert(items, {
+                                kind = "workspace",
+                                text = project .. "-" .. wt_name,
+                                file = wt_dir,
+                                branch = git_branch(wt_dir),
+                                session = session,
+                                session_exists = tmux_session_exists(session),
+                            })
+                        end
+                    end
+                else
+                    for _, wt in ipairs(worktrees) do
+                        local worktree_name = vim.fn.fnamemodify(wt.path, ":t")
+                        local session = tmux_session_name(wt.path)
+
+                        table.insert(items, {
+                            kind = "workspace",
+                            text = project .. "-" .. worktree_name,
+                            file = wt.path,
+                            branch = wt.branch,
+                            session = session,
+                            session_exists = tmux_session_exists(session),
+                        })
+                    end
                 end
             end
         end
     end
 
-    table.sort(workspaces, function(a, b)
+    table.sort(items, function(a, b)
         return a.text < b.text
     end)
 
-    return workspaces
+    return items
 end
 
 function M.switch()
-    local workspaces = discover()
+    local items = discover()
 
-    if #workspaces == 0 then
+    if #items == 0 then
         vim.notify(
-            "No Git worktrees found under " .. M.root,
+            "No projects or workspaces found under " .. M.root,
             vim.log.levels.WARN
         )
         return
@@ -93,19 +148,24 @@ function M.switch()
 
     Snacks.picker.pick({
         title = "Switch workspace",
-        items = workspaces,
+        items = items,
         format = function(item, _picker)
             local session_marker = item.session_exists and "●" or "○"
-            return {
+            local kind_hl = item.kind == "project" and "SnacksPickerDirectory" or "SnacksPickerLabel"
+            local chunks = {
                 {
                     session_marker .. " " .. item.text,
-                    "SnacksPickerLabel",
+                    kind_hl,
                 },
                 {
                     item.branch and ("  " .. item.branch) or "",
                     "SnacksPickerComment",
-                }
+                },
             }
+            if item.kind == "project" then
+                table.insert(chunks, { "  project", "SnacksPickerComment" })
+            end
+            return chunks
         end,
 
         confirm = function(picker, item)

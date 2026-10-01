@@ -608,17 +608,37 @@ if uv_ok then
 end
 
 -- iron.nvim (Interactive Repls Over Neovim)
+-- uv-aware: python REPL prefers `uv run --project <root> python`
+-- so it always uses the current project's uv environment.
 local iron_ok, iron = pcall(require, "iron.core")
 if iron_ok then
     local view = require("iron.view")
     local common = require("iron.fts.common")
+
+    local function uv_project_root(bufnr)
+        bufnr = bufnr or vim.api.nvim_get_current_buf()
+        local fname = vim.api.nvim_buf_get_name(bufnr)
+        local start = fname ~= "" and vim.fs.dirname(fname) or vim.fn.getcwd()
+        return vim.fs.root(start, { "pyproject.toml", "uv.lock", ".venv" })
+    end
+
+    local function python_command(meta)
+        local root = meta and meta.current_bufnr
+            and uv_project_root(meta.current_bufnr)
+            or uv_project_root()
+        if root then
+            return { "uv", "run", "--project", root, "python" }
+        end
+        return { "python3" }
+    end
+
     iron.setup({
         config = {
             scratch_repl = true,
             repl_definition = {
                 sh = { command = { "bash" } },
                 python = {
-                    command = { "python3" },
+                    command = python_command,
                     format = common.bracketed_paste_python,
                     block_dividers = { "# %%", "#%%" },
                     env = { PYTHON_BASIC_REPL = "1" }, -- needed for python3.13+
